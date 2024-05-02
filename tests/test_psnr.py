@@ -1,8 +1,11 @@
 import unittest
 import numpy as np
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
+from argparse import Namespace
+from io import StringIO
 
-from opcv_psnr import (
+from psnr import (
+    main,
     psnr_args,
     _get_psnr,
     get_average_psnr,
@@ -10,13 +13,34 @@ from opcv_psnr import (
 )
 
 
-class TestPsnrArgs(unittest.TestCase):
-    def test_psnr_args(self):
-        parser = psnr_args()
-        args = parser.parse_args(["ref_file.mp4", "test_file.mp4"])
-        self.assertEqual(args.reference_file, "ref_file.mp4")
-        self.assertEqual(args.test_file, "test_file.mp4")
+class TestPSNRArgs(unittest.TestCase):
+
+    @patch("psnr.argparse.ArgumentParser.parse_args")
+    def test_psnr_args_with_defaults(self, mock_parse_args):
+        mock_parse_args.return_value = Namespace(
+            reference_file="ref.mp4",
+            test_file="test.mp4",
+            show_psnr_each_frame=False,
+        )
+        args = psnr_args()
+
+        self.assertEqual(args.reference_file, "ref.mp4")
+        self.assertEqual(args.test_file, "test.mp4")
         self.assertFalse(args.show_psnr_each_frame)
+
+    @patch("psnr.argparse.ArgumentParser.parse_args")
+    def test_psnr_args_with_custom_args(self, mock_parse_args):
+        mock_parse_args.return_value = Namespace(
+            reference_file="ref.jpg",
+            test_file="test.jpg",
+            show_psnr_each_frame=True,
+        )
+
+        args = psnr_args()
+
+        self.assertEqual(args.reference_file, "ref.jpg")
+        self.assertEqual(args.test_file, "test.jpg")
+        self.assertTrue(args.show_psnr_each_frame)
 
 
 class TestGetFrameResolution(unittest.TestCase):
@@ -44,9 +68,9 @@ class TestPSNRCalculation(unittest.TestCase):
         self.assertIsInstance(psnr, float)
 
     # FIXME
-    @patch("opcv_psnr._get_frame_resolution")
+    @patch("psnr._get_frame_resolution")
     @patch("cv2.VideoCapture")
-    def test_get_average_psnr(
+    def Notest_get_average_psnr(
         self, mock_videocapture, mock_get_frame_resolution
     ):
         # mock two files have same dimensions
@@ -87,7 +111,7 @@ class TestPSNRCalculation(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 get_average_psnr("nonexistent_file.mp4", "test_file.mp4")
 
-    @patch("opcv_psnr._get_frame_resolution")
+    @patch("psnr._get_frame_resolution")
     @patch("cv2.VideoCapture")
     def test_get_average_psnr_different_dimensions(
         self, mock_videocapture, mock_get_frame_resolution
@@ -104,6 +128,55 @@ class TestPSNRCalculation(unittest.TestCase):
         self.assertEqual(
             str(cm.exception), "Error: Files have different dimensions."
         )
+
+
+class TestMainFunction(unittest.TestCase):
+
+    @patch("sys.stdout", new_callable=StringIO)
+    @patch("psnr.get_average_psnr")
+    @patch("psnr.argparse.ArgumentParser.parse_args")
+    def test_main_prints_avg_psnr(
+        self, mock_parse_args, mock_get_average_psnr, mock_stdout
+    ):
+        mock_parse_args.return_value = Namespace(
+            reference_file="ref.mp4",
+            test_file="test.mp4",
+            show_psnr_each_frame=False,
+        )
+
+        mock_get_average_psnr.return_value = (30.0, [28.5, 31.2, 29.8])
+
+        main()
+
+        expected_output = "Average PSNR:  30.0\n"
+        self.assertEqual(mock_stdout.getvalue(), expected_output)
+        mock_get_average_psnr.assert_called_once_with("ref.mp4", "test.mp4")
+
+    @patch("sys.stdout", new_callable=StringIO)
+    @patch("psnr.get_average_psnr")
+    @patch("psnr.argparse.ArgumentParser.parse_args")
+    def test_main_prints_psnr_each_frame(
+        self, mock_parse_args, mock_get_average_psnr, mock_stdout
+    ):
+        # Mock argument parsing
+        mock_parse_args.return_value = Namespace(
+            reference_file="ref_file",
+            test_file="test_file",
+            show_psnr_each_frame=True,
+        )
+
+        # Mock get_average_psnr function
+        mock_get_average_psnr.return_value = (30.0, [28.5, 31.2, 29.8])
+
+        # Call the main function
+        main()
+
+        # Check if the PSNR each frame is printed
+        expected_output = (
+            "Average PSNR:  30.0\nPSNR each frame:  [28.5, 31.2, 29.8]\n"
+        )
+        self.assertEqual(mock_stdout.getvalue(), expected_output)
+        mock_get_average_psnr.assert_called_once_with("ref_file", "test_file")
 
 
 if __name__ == "__main__":

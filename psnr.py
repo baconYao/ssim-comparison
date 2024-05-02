@@ -6,7 +6,7 @@ import argparse
 from typing import Tuple, List
 
 
-def psnr_args():
+def psnr_args() -> argparse.Namespace:
     """
     Parse command-line arguments using argparse.
 
@@ -30,7 +30,7 @@ def psnr_args():
         default=False,
         help="Absolutely always show command output",
     )
-    return parser
+    return parser.parse_args()
 
 
 def _get_psnr(I1: np.ndarray, I2: np.ndarray) -> float:
@@ -44,8 +44,6 @@ def _get_psnr(I1: np.ndarray, I2: np.ndarray) -> float:
     Returns:
         float: PSNR value indicating the quality of I2 compared to I1.
     """
-    # print(I1[0])
-    # print(I1.shape)
     # Calculate the absolute difference
     s1 = cv2.absdiff(I1, I2)
     # cannot make a square on 8 bits
@@ -115,11 +113,12 @@ def get_average_psnr(
 
 
 def main() -> None:
-    args = psnr_args().parse_args()
+    args = psnr_args()
     avg_psnr, psnr_each_frame = get_average_psnr(
         args.reference_file, args.test_file
     )
     print("Average PSNR: ", avg_psnr)
+    # print("args.show_psnr_each_frame: ", args.show_psnr_each_frame)
     if args.show_psnr_each_frame:
         print("PSNR each frame: ", psnr_each_frame)
 
